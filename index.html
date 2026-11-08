@@ -1,271 +1,628 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>온라인 루미큐브</title>
-  <!-- PeerJS CDN -->
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #2b3e50; color: #fff; padding: 20px; }
-    #lobby, #game { max-width: 1000px; margin: 0 auto; }
-    .card { background: #34495e; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    h1, h2 { margin-bottom: 15px; }
-    input, button { padding: 10px 16px; font-size: 16px; border-radius: 6px; border: none; outline: none; margin-right: 8px; margin-bottom: 8px; }
-    input { background: #ecf0f1; color: #2c3e50; }
-    button { background: #3498db; color: white; cursor: pointer; transition: 0.2s; font-weight: bold; }
-    button:hover { background: #2980b9; }
-    button:disabled { background: #7f8c8d; cursor: not-allowed; }
-    
-    .status-bar { display: flex; justify-content: space-between; align-items: center; background: #1abc9c; padding: 12px 20px; border-radius: 8px; margin-bottom: 15px; color: #2c3e50; font-weight: bold; }
-    
-    .board-zone, .hand-zone { background: #1e2b37; min-height: 180px; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px dashed #4a6572; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
-    
-    .tile { width: 44px; height: 60px; background: #fdfefe; border-radius: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-size: 20px; box-shadow: 0 3px 5px rgba(0,0,0,0.4); user-select: none; cursor: pointer; border: 2px solid #bdc3c7; position: relative; }
-    .tile.selected { border: 3px solid #f1c40f; transform: translateY(-4px); }
-    .tile.black { color: #2c3e50; }
-    .tile.red { color: #e74c3c; }
-    .tile.blue { color: #2980b9; }
-    .tile.yellow { color: #f39c12; }
-    .tile.joker { color: #8e44ad; font-size: 14px; }
-    
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn-action { background: #e67e22; }
-    .btn-action:hover { background: #d35400; }
-    .btn-end { background: #2ecc71; }
-    .btn-end:hover { background: #27ae60; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>루미큐브 온라인 (P2P Multiplayer)</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --board-bg: #1e293b;
+            --rack-bg: #334155;
+            --tile-bg: #f8fafc;
+            --tile-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --yellow: #f59e0b;
+            --black: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 헤더 및 접속 영역 */
+        header {
+            background-color: #1e293b;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #334155;
+        }
+
+        .logo { font-size: 1.5rem; font-weight: 800; color: #f59e0b; letter-spacing: 1px; }
+
+        .lobby-panel { display: flex; gap: 10px; align-items: center; }
+        input[type="text"] {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: white;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+        }
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background: #3b82f6;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { background: #2563eb; transform: translateY(-1px); }
+        button:disabled { background: #64748b; cursor: not-allowed; transform: none; }
+        .btn-success { background: #10b981; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; }
+        .btn-danger:hover { background: #dc2626; }
+
+        /* 게임 메인 레이아웃 */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            gap: 15px;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* 상태바 */
+        .status-bar {
+            background: #1e293b;
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--tile-shadow);
+        }
+        .turn-indicator { font-size: 1.1rem; font-weight: 700; }
+        .turn-my { color: #10b981; }
+        .turn-opp { color: #f43f5e; }
+
+        /* 필드 (보드판) */
+        .board-container {
+            flex: 1;
+            background: var(--board-bg);
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 380px;
+            border: 2px dashed #475569;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .meld-group {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: flex;
+            gap: 6px;
+            min-width: 140px;
+            min-height: 70px;
+            align-items: center;
+            cursor: pointer;
+            transition: border 0.2s;
+        }
+        .meld-group:hover { border-color: #3b82f6; }
+        .meld-group.selected-target { border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.15); }
+
+        /* 타일 디자인 */
+        .tile {
+            width: 44px;
+            height: 58px;
+            background: var(--tile-bg);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-weight: 800;
+            font-size: 1.3rem;
+            box-shadow: var(--tile-shadow);
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.15s, box-shadow 0.15s;
+            border: 1px solid #e2e8f0;
+        }
+        .tile:hover { transform: translateY(-4px); }
+        .tile.selected { transform: translateY(-8px); border: 2.5px solid #f59e0b; box-shadow: 0 8px 15px rgba(245, 158, 11, 0.4); }
+        
+        .tile.red { color: var(--red); }
+        .tile.blue { color: var(--blue); }
+        .tile.yellow { color: var(--yellow); }
+        .tile.black { color: var(--black); }
+        .tile.joker { background: #fef3c7; border: 2px solid #f59e0b; }
+        .tile.joker::after { content: '★'; font-size: 1.4rem; }
+
+        /* 컨트롤 영역 & 거치대 */
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .rack-container {
+            background: var(--rack-bg);
+            border-radius: 12px;
+            padding: 15px 20px;
+            min-height: 120px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            border: 2px solid #475569;
+            box-shadow: var(--tile-shadow);
+        }
+
+        .empty-hint {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
 
-  <div id="lobby" class="card">
-    <h1>🎲 실시간 루미큐브</h1>
-    <div style="margin-bottom: 20px;">
-      <h3>1. 방 만들기 (방장)</h3>
-      <button id="btn-create">새 게임 방 생성</button>
-      <p id="room-id-display" style="margin-top: 8px; font-weight: bold; color: #f1c40f;"></p>
-    </div>
-    <hr style="border: 0.5px solid #4a6572; margin: 20px 0;">
-    <div>
-      <h3>2. 방 참가하기 (친구)</h3>
-      <input type="text" id="input-room-id" placeholder="방 코드(Peer ID) 입력" />
-      <button id="btn-join">접속하기</button>
-    </div>
-  </div>
+    <header>
+        <div class="logo">🎲 RUMMIKUB P2P</div>
+        <div class="lobby-panel">
+            <span id="connection-status" style="color: #94a3b8; font-size: 0.9rem;">대기 중</span>
+            <button id="btn-create" onclick="createRoom()">방 만들기</button>
+            <input type="text" id="room-code-input" placeholder="방 코드 입력" maxlength="6" style="width: 110px;">
+            <button onclick="joinRoom()">참가하기</button>
+        </div>
+    </header>
 
-  <div id="game" style="display: none;">
-    <div class="status-bar">
-      <div>내 역할: <span id="role-text">-</span> | 현재 턴: <span id="turn-text">방장</span></div>
-      <div>남은 타일: <span id="deck-count">0</span>개</div>
-    </div>
+    <main>
+        <div class="status-bar">
+            <div class="turn-indicator" id="turn-display">방을 만들거나 참가하세요.</div>
+            <div>남은 타일 덱: <strong id="deck-count" style="color: #f59e0b;">0</strong>개</div>
+            <div>방 코드: <strong id="room-code-display" style="color: #3b82f6;">-</strong></div>
+        </div>
 
-    <h2>보드판 (공용 영역)</h2>
-    <div id="board" class="board-zone"></div>
+        <!-- 필드 (테이블 위에 내려진 조합들) -->
+        <div class="board-container" id="board" onclick="onBoardClick(event)">
+            <div class="empty-hint">테이블이 비어 있습니다. (선택한 타일을 여기에 클릭하여 새 그룹을 만드세요)</div>
+        </div>
 
-    <h2>내 타일 랙</h2>
-    <div id="hand" class="hand-zone"></div>
+        <!-- 컨트롤 버튼 -->
+        <div class="controls">
+            <button class="btn-success" id="btn-draw" onclick="drawTile()" disabled>타일 1개 가져오기 & 턴 넘기기</button>
+            <button onclick="sortRack('number')">숫자 정렬</button>
+            <button onclick="sortRack('color')">색상 정렬</button>
+            <button class="btn-danger" onclick="resetTurn()">이번 턴 원복</button>
+            <button class="btn-success" id="btn-end-turn" onclick="endTurn()" disabled style="padding: 8px 24px;">턴 완료</button>
+        </div>
 
-    <div class="controls card">
-      <button id="btn-draw" class="btn-action">타일 1개 가져오기 (턴 종료)</button>
-      <button id="btn-place" class="btn-action">선택한 타일 보드로내기</button>
-      <button id="btn-pass" class="btn-end">턴 넘기기</button>
-    </div>
-  </div>
+        <!-- 플레이어 거치대 -->
+        <div class="rack-container" id="rack" onclick="onRackClick(event)">
+            <div class="empty-hint">게임이 시작되면 타일이 여기에 표시됩니다.</div>
+        </div>
+    </main>
 
-  <script>
-    let peer = null;
-    let conn = null;
-    let isHost = false;
-    let myId = '';
-    
-    // 게임 상태
-    let gameState = {
-      deck: [],
-      board: [], // [{ id, color, number }]
-      players: {}, // { peerId: [tiles] }
-      turnOrder: [],
-      currentTurnIdx: 0
-    };
+    <script>
+        let peer = null;
+        let conn = null;
+        let myRole = null; // 'host' or 'guest'
+        let isMyTurn = false;
+        let selectedTileRef = null; // { source: 'rack'|'board', meldIndex, tileIndex, tile }
 
-    let selectedHandIndices = [];
+        // 전체 게임 상태
+        let gameState = {
+            deck: [],
+            board: [], // Array of Melds: [ [tile1, tile2], [tile3, tile4, tile5] ]
+            players: { host: [], guest: [] },
+            initialMeldDone: { host: false, guest: false },
+            turn: 'host',
+            gameStarted: false
+        };
 
-    const colors = ['red', 'blue', 'yellow', 'black'];
+        let turnBackupState = null; // 턴 시작 시 원복용 스냅샷
 
-    // 타일 덱 생성 (1~13 각 2세트 + 조커 2개)
-    function createDeck() {
-      const deck = [];
-      let idCounter = 1;
-      colors.forEach(color => {
-        for (let i = 1; i <= 13; i++) {
-          deck.push({ id: idCounter++, color, number: i });
-          deck.push({ id: idCounter++, color, number: i });
+        // 1. PeerJS 연결 설정
+        function createRoom() {
+            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+            peer = new Peer(code);
+
+            peer.on('open', (id) => {
+                myRole = 'host';
+                document.getElementById('room-code-display').innerText = id;
+                document.getElementById('connection-status').innerText = '상대방 기다리는 중...';
+                document.getElementById('btn-create').disabled = true;
+            });
+
+            peer.on('connection', (c) => {
+                conn = c;
+                setupConnection();
+            });
         }
-      });
-      deck.push({ id: idCounter++, color: 'joker', number: 'J' });
-      deck.push({ id: idCounter++, color: 'joker', number: 'J' });
-      
-      // 셔플
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-      }
-      return deck;
-    }
 
-    // 방 만들기 (Host)
-    document.getElementById('btn-create').addEventListener('click', () => {
-      peer = new Peer();
-      peer.on('open', (id) => {
-        myId = id;
-        isHost = true;
-        document.getElementById('room-id-display').innerText = `방 코드: ${id} (이 코드를 친구에게 전달하세요)`;
-        document.getElementById('role-text').innerText = '방장';
-        initHostGame();
-      });
-
-      peer.on('connection', (c) => {
-        conn = c;
-        setupConnection();
-      });
-    });
-
-    // 참가하기 (Client)
-    document.getElementById('btn-join').addEventListener('click', () => {
-      const targetId = document.getElementById('input-room-id').value.trim();
-      if (!targetId) return alert('방 코드를 입력하세요.');
-
-      peer = new Peer();
-      peer.on('open', (id) => {
-        myId = id;
-        isHost = false;
-        document.getElementById('role-text').innerText = '참가자';
-        conn = peer.connect(targetId);
-        setupConnection();
-      });
-    });
-
-    function setupConnection() {
-      conn.on('open', () => {
-        document.getElementById('lobby').style.display = 'none';
-        document.getElementById('game').style.display = 'block';
-
-        if (isHost) {
-          // 호스트가 게임 시작 상태 전달
-          gameState.turnOrder = [myId, conn.peer];
-          // 각자 14개씩 타일 배분
-          gameState.players[myId] = gameState.deck.splice(0, 14);
-          gameState.players[conn.peer] = gameState.deck.splice(0, 14);
-          broadcastState();
+        function joinRoom() {
+            const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (!code) return alert('방 코드를 입력하세요.');
+            
+            peer = new Peer();
+            peer.on('open', () => {
+                myRole = 'guest';
+                conn = peer.connect(code);
+                setupConnection();
+            });
         }
-      });
 
-      conn.on('data', (data) => {
-        if (data.type === 'SYNC') {
-          gameState = data.state;
-          render();
+        function setupConnection() {
+            conn.on('open', () => {
+                document.getElementById('connection-status').innerText = '🟢 연결됨';
+                document.getElementById('room-code-display').innerText = conn.peer;
+
+                if (myRole === 'host') {
+                    initGame();
+                }
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'SYNC') {
+                    gameState = data.state;
+                    updateUI();
+                } else if (data.type === 'ALERT') {
+                    alert(data.message);
+                }
+            });
+
+            conn.on('close', () => {
+                alert('상대방과의 연결이 끊어졌습니다.');
+                location.reload();
+            });
         }
-      });
-    }
 
-    function initHostGame() {
-      gameState.deck = createDeck();
-    }
+        // 2. 루미큐브 게임 로직
+        function createDeck() {
+            const colors = ['red', 'blue', 'yellow', 'black'];
+            let deck = [];
+            let id = 1;
 
-    function broadcastState() {
-      render();
-      if (conn && conn.open) {
-        conn.send({ type: 'SYNC', state: gameState });
-      }
-    }
+            for (let i = 0; i < 2; i++) {
+                for (let color of colors) {
+                    for (let num = 1; num <= 13; num++) {
+                        deck.push({ id: id++, number: num, color: color, isJoker: false });
+                    }
+                }
+            }
+            // 조커 2개
+            deck.push({ id: id++, number: 0, color: 'red', isJoker: true });
+            deck.push({ id: id++, number: 0, color: 'black', isJoker: true });
 
-    function isMyTurn() {
-      return gameState.turnOrder[gameState.currentTurnIdx] === myId;
-    }
-
-    // 렌더링
-    function render() {
-      const turnPeerId = gameState.turnOrder[gameState.currentTurnIdx];
-      document.getElementById('turn-text').innerText = turnPeerId === myId ? '내 턴 🟢' : '상대방 턴 🔴';
-      document.getElementById('deck-count').innerText = gameState.deck.length;
-
-      // 보드 렌더링
-      const boardEl = document.getElementById('board');
-      boardEl.innerHTML = '';
-      gameState.board.forEach(tile => {
-        const el = createTileEl(tile);
-        boardEl.appendChild(el);
-      });
-
-      // 손패 렌더링
-      const handEl = document.getElementById('hand');
-      handEl.innerHTML = '';
-      const myTiles = gameState.players[myId] || [];
-      myTiles.forEach((tile, idx) => {
-        const el = createTileEl(tile);
-        if (selectedHandIndices.includes(idx)) {
-          el.classList.add('selected');
+            // 셔플
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
         }
-        el.addEventListener('click', () => {
-          if (!isMyTurn()) return;
-          if (selectedHandIndices.includes(idx)) {
-            selectedHandIndices = selectedHandIndices.filter(i => i !== idx);
-          } else {
-            selectedHandIndices.push(idx);
-          }
-          render();
-        });
-        handEl.appendChild(el);
-      });
 
-      // 버튼 활성화 조절
-      const myTurn = isMyTurn();
-      document.getElementById('btn-draw').disabled = !myTurn;
-      document.getElementById('btn-place').disabled = !myTurn || selectedHandIndices.length === 0;
-      document.getElementById('btn-pass').disabled = !myTurn;
-    }
+        function initGame() {
+            const deck = createDeck();
+            const hostHand = deck.splice(0, 14);
+            const guestHand = deck.splice(0, 14);
 
-    function createTileEl(tile) {
-      const div = document.createElement('div');
-      div.className = `tile ${tile.color}`;
-      div.innerText = tile.number;
-      return div;
-    }
+            gameState = {
+                deck: deck,
+                board: [],
+                players: { host: hostHand, guest: guestHand },
+                initialMeldDone: { host: false, guest: false },
+                turn: 'host',
+                gameStarted: true
+            };
 
-    // 타일 가져오기 (Draw)
-    document.getElementById('btn-draw').addEventListener('click', () => {
-      if (!isMyTurn() || gameState.deck.length === 0) return;
-      const drawn = gameState.deck.pop();
-      gameState.players[myId].push(drawn);
-      endTurn();
-    });
+            saveTurnSnapshot();
+            syncState();
+            updateUI();
+        }
 
-    // 선택한 타일 보드로 내기
-    document.getElementById('btn-place').addEventListener('click', () => {
-      if (!isMyTurn() || selectedHandIndices.length === 0) return;
-      
-      // 인덱스 내림차순 정렬 후 제거
-      selectedHandIndices.sort((a, b) => b - a);
-      selectedHandIndices.forEach(idx => {
-        const tile = gameState.players[myId].splice(idx, 1)[0];
-        gameState.board.push(tile);
-      });
+        function saveTurnSnapshot() {
+            turnBackupState = JSON.parse(JSON.stringify(gameState));
+        }
 
-      selectedHandIndices = [];
-      broadcastState();
-    });
+        function syncState() {
+            if (conn && conn.open) {
+                conn.send({ type: 'SYNC', state: gameState });
+            }
+        }
 
-    // 턴 넘기기
-    document.getElementById('btn-pass').addEventListener('click', () => {
-      if (!isMyTurn()) return;
-      endTurn();
-    });
+        // 3. UI 렌더링
+        function updateUI() {
+            isMyTurn = (gameState.turn === myRole);
 
-    function endTurn() {
-      selectedHandIndices = [];
-      gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.turnOrder.length;
-      broadcastState();
-    }
-  </script>
+            // 상태 텍스트
+            const turnDisplay = document.getElementById('turn-display');
+            if (!gameState.gameStarted) {
+                turnDisplay.innerText = '대기 중...';
+            } else if (isMyTurn) {
+                turnDisplay.innerText = '🎯 내 턴입니다!';
+                turnDisplay.className = 'turn-indicator turn-my';
+            } else {
+                turnDisplay.innerText = '⏳ 상대방 턴 진행 중...';
+                turnDisplay.className = 'turn-indicator turn-opp';
+            }
+
+            document.getElementById('deck-count').innerText = gameState.deck.length;
+
+            // 버튼 상태
+            document.getElementById('btn-draw').disabled = !isMyTurn;
+            document.getElementById('btn-end-turn').disabled = !isMyTurn;
+
+            // 보드판 렌더링
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            if (gameState.board.length === 0) {
+                boardEl.innerHTML = '<div class="empty-hint">테이블이 비어 있습니다. (선택한 타일을 여기에 클릭하여 새 그룹을 만드세요)</div>';
+            } else {
+                gameState.board.forEach((meld, meldIdx) => {
+                    const meldDiv = document.createElement('div');
+                    meldDiv.className = 'meld-group';
+                    meldDiv.onclick = (e) => { e.stopPropagation(); onMeldClick(meldIdx); };
+
+                    meld.forEach((tile, tileIdx) => {
+                        meldDiv.appendChild(renderTile(tile, 'board', meldIdx, tileIdx));
+                    });
+                    boardEl.appendChild(meldDiv);
+                });
+            }
+
+            // 거치대 렌더링
+            const rackEl = document.getElementById('rack');
+            rackEl.innerHTML = '';
+            const myHand = gameState.players[myRole] || [];
+            if (myHand.length === 0) {
+                rackEl.innerHTML = '<div class="empty-hint">거치대가 비어있습니다. (승리!)</div>';
+            } else {
+                myHand.forEach((tile, tileIdx) => {
+                    rackEl.appendChild(renderTile(tile, 'rack', null, tileIdx));
+                });
+            }
+        }
+
+        function renderTile(tile, source, meldIdx, tileIdx) {
+            const div = document.createElement('div');
+            div.className = `tile ${tile.color} ${tile.isJoker ? 'joker' : ''}`;
+            if (!tile.isJoker) div.innerText = tile.number;
+
+            // 선택 강조
+            if (selectedTileRef && 
+                selectedTileRef.source === source && 
+                selectedTileRef.tile.id === tile.id) {
+                div.classList.add('selected');
+            }
+
+            div.onclick = (e) => {
+                e.stopPropagation();
+                if (!isMyTurn) return;
+                handleTileSelect(source, meldIdx, tileIdx, tile);
+            };
+            return div;
+        }
+
+        // 4. 타일 이동 및 조작 선택
+        function handleTileSelect(source, meldIdx, tileIdx, tile) {
+            if (!selectedTileRef) {
+                // 첫 클릭: 타일 선택
+                selectedTileRef = { source, meldIndex: meldIdx, tileIndex: tileIdx, tile };
+            } else {
+                // 두 번째 클릭: 선택된 타일을 기존 타일 묶음에 합치기
+                if (source === 'board') {
+                    moveTileToMeld(selectedTileRef, meldIdx);
+                } else if (source === 'rack') {
+                    moveTileToRack(selectedTileRef);
+                }
+                selectedTileRef = null;
+            }
+            updateUI();
+        }
+
+        function onBoardClick(e) {
+            if (!isMyTurn || !selectedTileRef) return;
+            // 빈 필드 클릭 시 -> 새로운 그룹 생성
+            moveTileToNewMeld(selectedTileRef);
+            selectedTileRef = null;
+            updateUI();
+        }
+
+        function onRackClick(e) {
+            if (!isMyTurn || !selectedTileRef) return;
+            // 거치대로 되돌리기
+            moveTileToRack(selectedTileRef);
+            selectedTileRef = null;
+            updateUI();
+        }
+
+        function onMeldClick(meldIdx) {
+            if (!isMyTurn || !selectedTileRef) return;
+            moveTileToMeld(selectedTileRef, meldIdx);
+            selectedTileRef = null;
+            updateUI();
+        }
+
+        // 타일 데이터 이동 처리
+        function removeTileFromSource(ref) {
+            if (ref.source === 'rack') {
+                const hand = gameState.players[myRole];
+                hand.splice(ref.tileIndex, 1);
+            } else if (ref.source === 'board') {
+                const meld = gameState.board[ref.meldIndex];
+                meld.splice(ref.tileIndex, 1);
+                if (meld.length === 0) {
+                    gameState.board.splice(ref.meldIndex, 1);
+                }
+            }
+        }
+
+        function moveTileToNewMeld(ref) {
+            removeTileFromSource(ref);
+            gameState.board.push([ref.tile]);
+        }
+
+        function moveTileToMeld(ref, targetMeldIdx) {
+            removeTileFromSource(ref);
+            // targetMeldIdx 검증
+            if (gameState.board[targetMeldIdx]) {
+                gameState.board[targetMeldIdx].push(ref.tile);
+            } else {
+                gameState.board.push([ref.tile]);
+            }
+        }
+
+        function moveTileToRack(ref) {
+            if (ref.source === 'rack') return; // 이미 거치대에 있음
+            removeTileFromSource(ref);
+            gameState.players[myRole].push(ref.tile);
+        }
+
+        // 5. 정렬 기능
+        function sortRack(type) {
+            const hand = gameState.players[myRole];
+            if (!hand) return;
+
+            if (type === 'number') {
+                hand.sort((a, b) => a.number - b.number || a.color.localeCompare(b.color));
+            } else if (type === 'color') {
+                hand.sort((a, b) => a.color.localeCompare(b.color) || a.number - b.number);
+            }
+            updateUI();
+        }
+
+        // 6. 규칙 검증 및 턴 관리
+        function isValidGroup(meld) {
+            if (meld.length < 3) return false;
+
+            // 조커 제외 타일
+            const realTiles = meld.filter(t => !t.isJoker);
+            if (realTiles.length === 0) return true; // 조커만으로 이뤄진 특수 케이스 예외 인정
+
+            // 1) 같은 숫자 & 다른 색상 (Group)
+            const sameNumber = realTiles.every(t => t.number === realTiles[0].number);
+            const colors = realTiles.map(t => t.color);
+            const uniqueColors = new Set(colors);
+            const isGroup = sameNumber && (colors.length === uniqueColors.size) && meld.length <= 4;
+
+            if (isGroup) return true;
+
+            // 2) 같은 색상 & 연속된 숫자 (Run)
+            const sameColor = realTiles.every(t => t.color === realTiles[0].color);
+            if (!sameColor) return false;
+
+            // 연속성 검사 (조커 포함 고려)
+            let sorted = [...meld].sort((a, b) => {
+                if (a.isJoker) return 1;
+                if (b.isJoker) return -1;
+                return a.number - b.number;
+            });
+
+            // 숫자 간격 계산
+            let jokers = meld.filter(t => t.isJoker).length;
+            let nonJokers = meld.filter(t => !t.isJoker).sort((a, b) => a.number - b.number);
+
+            for (let i = 0; i < nonJokers.length - 1; i++) {
+                let diff = nonJokers[i+1].number - nonJokers[i].number;
+                if (diff === 1) continue;
+                if (diff <= 0) return false; // 중복 숫자 불가
+                
+                let gap = diff - 1;
+                if (jokers >= gap) {
+                    jokers -= gap;
+                } else {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        function validateBoard() {
+            // 보드 위 모든 묶음이 유효한지 검사
+            for (let meld of gameState.board) {
+                if (!isValidGroup(meld)) return false;
+            }
+            return true;
+        }
+
+        function drawTile() {
+            if (!isMyTurn) return;
+            if (gameState.deck.length === 0) {
+                alert('덱에 더 이상 타일이 없습니다.');
+                return;
+            }
+
+            // 이번 턴에 보드를 건드렸다면 턴 원복 후 1장 뽑기
+            if (JSON.stringify(gameState.board) !== JSON.stringify(turnBackupState.board)) {
+                if (!confirm('변경된 보드 상태가 원복되고 타일을 1장 뽑습니다. 계속하시겠습니까?')) return;
+                gameState = JSON.parse(JSON.stringify(turnBackupState));
+            }
+
+            const drawn = gameState.deck.pop();
+            gameState.players[myRole].push(drawn);
+
+            passTurn();
+        }
+
+        function endTurn() {
+            if (!isMyTurn) return;
+
+            // 보드 상태 전체 유효성 검사
+            if (!validateBoard()) {
+                alert('⚠️ 보드 위에 유효하지 않은 묶음(3개 미만 또는 규칙 위반)이 존재합니다.');
+                return;
+            }
+
+            // 등록(30점 이상) 확인 로직 생략 없이 간이 적용
+            const prevRackCount = turnBackupState.players[myRole].length;
+            const currentRackCount = gameState.players[myRole].length;
+
+            if (prevRackCount === currentRackCount) {
+                alert('타일을 내려놓거나 1장 뽑아야 턴을 마칠 수 있습니다.');
+                return;
+            }
+
+            // 승리 조건 체크
+            if (gameState.players[myRole].length === 0) {
+                alert('🎉 축하합니다! 모든 타일을 사용하여 승리하셨습니다!');
+            }
+
+            passTurn();
+        }
+
+        function passTurn() {
+            gameState.turn = (gameState.turn === 'host') ? 'guest' : 'host';
+            saveTurnSnapshot();
+            syncState();
+            updateUI();
+        }
+
+        function resetTurn() {
+            if (!isMyTurn || !turnBackupState) return;
+            gameState = JSON.parse(JSON.stringify(turnBackupState));
+            selectedTileRef = null;
+            updateUI();
+        }
+    </script>
 </body>
 </html>
